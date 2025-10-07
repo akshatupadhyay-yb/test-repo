@@ -15,7 +15,7 @@ import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 import boto3
 from boto3.session import Session
@@ -63,7 +63,7 @@ CSV_COLUMNS: List[str] = [
 ]
 
 
-def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
+def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Find RDS DB instances across regions and export details to CSV",
     )
@@ -102,14 +102,7 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def create_session(profile: Optional[str]) -> Session:
-    if profile:
-        try:
-            return boto3.session.Session(profile_name=profile)
-        except ProfileNotFound as exc:
-            print(f"Error: AWS profile '{profile}' not found: {exc}", file=sys.stderr)
-            sys.exit(2)
-    return boto3.session.Session()
+ 
 
 
 def get_regions(session: Session, explicit_regions: Optional[List[str]]) -> List[str]:
@@ -244,10 +237,18 @@ def write_csv(output_path: str, rows: List[Dict[str, Any]]) -> None:
             writer.writerow(sanitized)
 
 
-def main(argv: Optional[Iterable[str]] = None) -> int:
+def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv)
 
-    session = create_session(args.profile)
+    try:
+        session = (
+            boto3.session.Session(profile_name=args.profile)
+            if args.profile
+            else boto3.session.Session()
+        )
+    except ProfileNotFound as exc:
+        print(f"Error: AWS profile '{args.profile}' not found: {exc}", file=sys.stderr)
+        return 2
 
     regions = get_regions(session, args.regions)
     if not regions:
